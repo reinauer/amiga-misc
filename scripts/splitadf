@@ -26,31 +26,44 @@ FULLSIZE=$( stat -c %s  $ARCHIVE )
 NUMDISKS=$(( ( $FULLSIZE + ( $ONEDISK - 1) )/ $ONEDISK ))
 
 echo "Archive: $BASE"
-echo "Name:${NAME}xx"
-printf "Full Archive: %d\nPer disk: %d\nNumber of disks: %d\n" $FULLSIZE $ONEDISK $NUMDISKS
 
-split --numeric-suffixes=1 -b $ONEDISK $ARCHIVE $NAME.
+if [ $NUMDISKS = 1 ]; then
+  echo "Name:${NAME}"
+  printf "Full Archive: %d fits on one disk\n" $FULLSIZE
 
-for i in $(seq 1 $NUMDISKS); do
-  xdftool $NAME$i.adf create + format "$NAME$i" ffs
-  xdftool $NAME$i.adf write $NAME.0$i
-done
+  xdftool $NAME.adf create + format "$NAME" ffs
+  xdftool $NAME.adf write $ARCHIVE
+  xdftool $NAME.adf list
+else
+  echo "Name:${NAME}xx"
+  printf "Full Archive: %d\nPer disk: %d\nNumber of disks: %d\n" $FULLSIZE $ONEDISK $NUMDISKS
 
-(
-  printf "JOIN "
+  split --numeric-suffixes=1 -b $ONEDISK $ARCHIVE $NAME.
+
+
   for i in $(seq 1 $NUMDISKS); do
-    printf "$NAME$i:$NAME.0$i "
+    xdftool $NAME$i.adf create + format "$NAME$i" ffs
+    xdftool $NAME$i.adf write $NAME.0$i
   done
-  printf "AS WORK:$BASE\n"
-) > RunMe
 
-xdftool ${NAME}1.adf write RunMe
-xdftool ${NAME}1.adf protect RunMe SPARWED
+  (
+    printf "JOIN "
+    for i in $(seq 1 $NUMDISKS); do
+      printf "$NAME$i:$NAME.0$i "
+    done
+    printf "AS WORK:$BASE\n"
+  ) > RunMe
 
-for i in $(seq 1 $NUMDISKS); do
-  xdftool $NAME$i.adf list
-done
-cat RunMe
+  xdftool ${NAME}1.adf write RunMe
+  xdftool ${NAME}1.adf protect RunMe SPARWED
 
-rm ${NAME}.0?
-rm RunMe
+  for i in $(seq 1 $NUMDISKS); do
+    xdftool $NAME$i.adf list
+  done
+
+  cat RunMe
+
+  rm -f${NAME}.0?
+  rm -f RunMe
+fi
+

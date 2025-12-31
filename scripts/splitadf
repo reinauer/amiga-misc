@@ -24,46 +24,55 @@ fi
 BASE=$(basename "$ARCHIVE")
 NAME=${BASE%.*}
 
-ONEDISK=860000
+ONEDISK=880000
 FULLSIZE=$(stat -c %s "$ARCHIVE")
 NUMDISKS=$(( ( $FULLSIZE + ( $ONEDISK - 1) )/ $ONEDISK ))
+
+# Crop name so that DISKNAME fits in 30 chars (accounting for _DiskXX suffix if multi-disk)
+if [ $NUMDISKS -eq 1 ]; then
+  DISKNAME=${NAME:0:30}
+else
+  SUFFIX_LEN=$((5 + ${#NUMDISKS}))
+  DISKNAME=${NAME:0:$((30 - SUFFIX_LEN))}
+fi
 
 echo "Archive: $BASE"
 
 if [ $NUMDISKS -eq 1 ]; then
-  echo "Name:${NAME}"
+  echo "Name:${DISKNAME}"
   printf "Full Archive: %d fits on one disk\n" $FULLSIZE
 
-  xdftool "$NAME.adf" create + format "$NAME" ffs
-  xdftool "$NAME.adf" write "$ARCHIVE"
-  xdftool "$NAME.adf" list
-  echo "Success: Created $NAME.adf"
+  xdftool "$DISKNAME.adf" create + format "$DISKNAME" ffs
+  xdftool "$DISKNAME.adf" write "$ARCHIVE"
+  #xdftool "$DISKNAME.adf" list
+  echo "Success: Created $DISKNAME.adf"
 else
-  echo "Name:${NAME}xx"
+  echo "Name:${DISKNAME}_Diskx"
   printf "Full Archive: %d\nPer disk: %d\nNumber of disks: %d\n" $FULLSIZE $ONEDISK $NUMDISKS
 
-  split --numeric-suffixes=1 -b $ONEDISK "$ARCHIVE" "$NAME."
+  split --numeric-suffixes=1 -b $ONEDISK "$ARCHIVE" ""
 
 
   for i in $(seq 1 $NUMDISKS); do
     SUFFIX=$(printf "%02d" $i)
-    xdftool "$NAME$i.adf" create + format "$NAME$i" ffs
-    xdftool "$NAME$i.adf" write "$NAME.$SUFFIX"
+    xdftool "${DISKNAME}_Disk$i.adf" create + format "${DISKNAME}_Disk$i" ffs
+    xdftool "${DISKNAME}_Disk$i.adf" write "$SUFFIX"
   done
 
   (
+    echo "ECHO \"Creating WORK:$BASE\""
     printf "JOIN "
     for i in $(seq 1 $NUMDISKS); do
       SUFFIX=$(printf "%02d" $i)
-      printf "%s" "$NAME$i:$NAME.$SUFFIX "
+      printf "%s" "${DISKNAME}_Disk$i:$SUFFIX "
     done
     printf "AS WORK:%s\n" "$BASE"
   ) > RunMe
 
   echo "$RUNME_INFO_HEX" | xxd -r -p > RunMe.info
-  xdftool "${NAME}1.adf" write RunMe
-  xdftool "${NAME}1.adf" write RunMe.info
-  xdftool "${NAME}1.adf" protect RunMe SPARWED
+  xdftool "${DISKNAME}_Disk1.adf" write RunMe
+  xdftool "${DISKNAME}_Disk1.adf" write RunMe.info
+  xdftool "${DISKNAME}_Disk1.adf" protect RunMe SPARWED
 
   #for i in $(seq 1 $NUMDISKS); do
   #  xdftool "$NAME$i.adf" list
@@ -71,8 +80,8 @@ else
 
   #cat RunMe
 
-  rm -f "$NAME".[0-9][0-9]
+  rm -f [0-9][0-9]
   rm -f RunMe RunMe.info
-  echo "Success: Created $NUMDISKS ADF files (${NAME}1.adf - ${NAME}${NUMDISKS}.adf)"
+  echo "Success: Created $NUMDISKS ADF files (${DISKNAME}_Disk1.adf - ${DISKNAME}_Disk${NUMDISKS}.adf)"
 fi
 
